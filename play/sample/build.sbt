@@ -1,0 +1,1 @@
+enablePlugins( PlayScala, io.taig.play.SlickCodegenPlugin )
