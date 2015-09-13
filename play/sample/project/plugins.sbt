@@ -1,3 +1,5 @@
-lazy val root = Project( "plugin", file( "." ) ) dependsOn file( "../" ).getAbsoluteFile.toURI
+lazy val root = Project( "sample", file( "." ) ) dependsOn ProjectRef( file( "../../../" ), "play" )
 
-addSbtPlugin( "com.typesafe.play" % "sbt-plugin" % "2.4.2" )
+libraryDependencies += "org.postgresql" % "postgresql" % "9.4-1202-jdbc42"
+
+addSbtPlugin( "com.typesafe.play" % "sbt-plugin" % "2.4.3" )

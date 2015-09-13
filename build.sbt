@@ -28,9 +28,7 @@ lazy val play = project.in( file( "play" ) )
     .settings(
         addSbtPlugin( "com.typesafe.play" % "sbt-plugin" % "2.4.3" ),
         libraryDependencies ++= (
-            "com.typesafe.play" %% "play" % "2.4.3" ::
-            "com.typesafe.play" %% "play-slick" % "1.0.1" ::
-            "com.typesafe.play" %% "play-test" % "2.4.3" ::
+            "com.typesafe" % "config" % "1.3.0" ::
             Nil
         ),
         name := "PlaySlickCodegen",

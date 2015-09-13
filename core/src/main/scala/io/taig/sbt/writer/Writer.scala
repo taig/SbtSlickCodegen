@@ -1,12 +1,10 @@
-package io.taig.sbt
+package io.taig.sbt.writer
 
 import java.io.File._
 import java.io.{ BufferedWriter, File, FileWriter }
 import java.sql.SQLException
 
 import sbt.Logger
-import slick.codegen.SourceCodeGenerator
-import slick.model.Model
 
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -15,11 +13,7 @@ import scala.concurrent.duration.Duration._
 object Writer {
     def error( message: String, cause: Throwable = null ) = throw new RuntimeException( message, cause )
 
-    def apply(
-        target:        File,
-        configuration: Database,
-        logger:        Logger
-    ): File = {
+    def apply( target: File, configuration: Configuration, logger: Logger ): File = {
         import configuration._
 
         if ( target.exists() ) {

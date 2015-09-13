@@ -1,12 +1,12 @@
-package io.taig.sbt
+package io.taig.sbt.writer
 
 import slick.codegen.SourceCodeGenerator
 import slick.driver.JdbcProfile
 
 /**
- * Database configuration
+ * Configuration
  *
- * @param authentication Authentication configuration
+ * @param authentication Credential configuration
  * @param driver Driver configuration
  * @param container Name of the generated file and class that contains the table definitions
  * @param identifier Package identifier of the generated code
@@ -14,14 +14,14 @@ import slick.driver.JdbcProfile
  * @param excludes List of tables for which no code shall be generated
  * @param cache Allow to continue the code generation task with a cached file if the database is not available
  */
-case class Database(
+case class Configuration(
     authentication: Authentication,
     driver:         Driver,
-    container:      String                                  = "Tables",
-    identifier:     Option[String]                          = None,
-    generator:      slick.model.Model ⇒ SourceCodeGenerator = new SourceCodeGenerator( _ ),
-    excludes:       Seq[String]                             = Seq.empty,
-    cache:          Boolean                                 = true
+    container:      String,
+    identifier:     Option[String],
+    generator:      slick.model.Model ⇒ SourceCodeGenerator,
+    excludes:       Seq[String],
+    cache:          Boolean
 )
 
 /**
@@ -33,8 +33,8 @@ case class Database(
  */
 case class Authentication(
     url:      String,
-    username: Option[String] = None,
-    password: Option[String] = None
+    username: Option[String],
+    password: Option[String]
 )
 
 /**
@@ -47,5 +47,5 @@ case class Authentication(
 case class Driver(
     jdbc:  String,
     slick: JdbcProfile,
-    user:  Option[String] = None
+    user:  Option[String]
 )
