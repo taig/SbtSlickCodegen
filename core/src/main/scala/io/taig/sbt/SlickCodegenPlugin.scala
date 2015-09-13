@@ -1,71 +1,63 @@
 package io.taig.sbt
 
-import java.io.File
-
-import io.taig.sbt.writer.{ Driver, Writer }
 import sbt.Keys._
 import sbt._
 import sbt.plugins.JvmPlugin
 import slick.codegen.SourceCodeGenerator
 import slick.driver.JdbcProfile
-import slick.model.Model
 
 import scala.collection.mutable
+import scala.reflect.runtime._
 
 object SlickCodegenPlugin extends AutoPlugin {
     val configurations = mutable.Map[String, sbt.Configuration]()
 
     object autoImport {
-        object slickCodegen {
-            def Database( name: String ) = {
-                configurations.getOrElseUpdate( name, config( s"database-$name" ) extend Compile )
+        object slickCodegen extends Keys {
+            val Database: Configuration = config( "database" ) extend Compile
+
+            def Database( name: String ): Configuration = {
+                configurations.getOrElseUpdate( name, config( s"database-$name" ) extend Database )
             }
 
-            object database {
-                val driver = SettingKey[String]( "database-driver", "Database driver" )
+            def addDatabase = Command.args(
+                "slick-codegen-add-database",
+                "name, jdbc driver, url, slick profile"
+            ) { ( state, arguments ) ⇒
+                    require( arguments.length == 4, "Need exactly 4 arguments" )
+                    val name = arguments( 0 )
+                    val driver = arguments( 1 )
+                    val url = arguments( 2 )
+                    val slick = {
+                        val mirror = universe.runtimeMirror( getClass.getClassLoader )
+                        val module = mirror.staticModule( arguments( 3 ) )
+                        mirror.reflectModule( module ).instance.asInstanceOf[JdbcProfile]
+                    }
 
-                val password = SettingKey[Option[String]]( "database-password", "Database password" )
+                    val configuration = Database( name )
 
-                val url = SettingKey[String]( "database-url", "Database url" )
+                    val extracted = Project extract state
 
-                val username = SettingKey[Option[String]]( "database-username", "Database username" )
-            }
-
-            object profile {
-                val slick = SettingKey[JdbcProfile]( "profile-slick", "Slick database driver" )
-
-                val user = SettingKey[Option[String]]( "profile-user", "Custom slick database driver" )
-            }
-
-            val cache = SettingKey[Boolean](
-                "cache",
-                "Continue with a previously generated file if the database is not running?"
-            )
-
-            val container = SettingKey[String](
-                "container",
-                "Name of the class and file that contains the generated code"
-            )
-
-            val excludes = SettingKey[Seq[String]](
-                "excludes",
-                "List of table names for which code generation will be skipped"
-            )
-
-            val generate = TaskKey[File](
-                "generate",
-                "Run the code generator"
-            )
-
-            val generator = SettingKey[Model ⇒ SourceCodeGenerator](
-                "generator",
-                "Actual SourceCodeGenerator implementation"
-            )
-
-            val identifier = SettingKey[Option[String]](
-                "identifier",
-                "Package identifier of the generated file"
-            )
+                    extracted.append(
+                        inConfig( configuration ) {
+                            Seq(
+                                database.driver := driver,
+                                database.url := url,
+                                profile.slick := slick,
+                                database.username := ( database.username in Database ).value,
+                                database.password := ( database.password in Database ).value,
+                                profile.user := ( profile.user in Database ).value,
+                                cache := ( cache in Database ).value,
+                                container := ( container in Database ).value,
+                                excludes := ( excludes in Database ).value,
+                                generator := ( generator in Database ).value,
+                                identifier := ( identifier in Database ).value,
+                                sourceManaged := ( sourceManaged in Database ).value
+                            )
+                        } ++ Settings.create( name, configuration ),
+                        state
+                    )
+                }
         }
     }
 
@@ -73,47 +65,59 @@ object SlickCodegenPlugin extends AutoPlugin {
 
     override def requires = JvmPlugin
 
-    override def projectConfigurations = configurations.values.toSeq
+    override lazy val projectConfigurations = Database +: configurations.values.toSeq
 
-    override lazy val projectSettings = {
-        import writer._
+    object Settings {
+        val default = inConfig( Database ) {
+            Seq(
+                database.username := None,
+                database.password := None,
+                profile.user := None,
+                cache := true,
+                container := "Tables",
+                excludes := Seq.empty,
+                generator := { new SourceCodeGenerator( _ ) },
+                identifier := None,
+                sourceManaged := ( sourceManaged in Compile ).value
+            )
+        } ++ Seq(
+            commands += addDatabase
+        )
 
-        configurations.flatMap {
-            case ( name, configuration ) ⇒ inConfig( configuration ) {
-                Seq(
-                    database.username := None,
-                    database.password := None,
-                    profile.user := None,
-                    cache := true,
-                    container := name.capitalize + "Tables",
-                    excludes := Seq.empty,
-                    generate := {
-                        val configuration = Configuration(
-                            Authentication(
-                                database.url.value,
-                                database.username.value,
-                                database.password.value
-                            ),
-                            Driver(
-                                database.driver.value,
-                                profile.slick.value,
-                                profile.user.value
-                            ),
-                            container.value,
-                            identifier.value,
-                            generator.value,
-                            excludes.value,
-                            cache.value
-                        )
+        val configurations = SlickCodegenPlugin
+            .configurations
+            .flatMap{ case ( name, configuration ) ⇒ create( name, configuration ) }
 
-                        Writer( sourceManaged.value, configuration, streams.value.log )
-                    },
-                    generator := { new SourceCodeGenerator( _ ) },
-                    identifier := None,
+        def create( name: String, configuration: Configuration ) = inConfig( configuration ) {
+            import writer._
 
-                    sourceGenerators in Compile <+= generate.map( Seq( _ ) )
-                )
-            }
-        }.toSeq
+            Seq(
+                container := name.capitalize + container.value,
+                generate := Writer(
+                    sourceManaged.value,
+                    Configuration(
+                        Authentication(
+                            database.url.value,
+                            database.username.value,
+                            database.password.value
+                        ),
+                        Driver(
+                            database.driver.value,
+                            profile.slick.value,
+                            profile.user.value
+                        ),
+                        container.value,
+                        identifier.value,
+                        generator.value,
+                        excludes.value,
+                        cache.value
+                    ),
+                    streams.value.log
+                ),
+                sourceGenerators in Compile <+= generate.map( Seq( _ ) )
+            )
+        }
     }
+
+    override lazy val projectSettings = Settings.default ++ Settings.configurations
 }
